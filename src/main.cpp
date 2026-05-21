@@ -17,9 +17,7 @@
 // =====================================================
 
 #define LIGHT_SENSOR 14
-
 #define PROX_SENSOR 13
-
 #define RELAY 12
 
 // =====================================================
@@ -27,7 +25,13 @@
 // =====================================================
 
 String firebaseURL =
+"https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap.json";
+
+String statusURL =
 "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/status.json";
+
+String autoModeURL =
+"https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/auto_mode.json";
 
 // =====================================================
 // CAMERA PIN AI THINKER
@@ -56,29 +60,84 @@ String firebaseURL =
 // TIMER CAMERA
 // =====================================================
 
-// 1 MENIT
 unsigned long lastCapture = 0;
-
-const unsigned long captureInterval =
-60000;
+const unsigned long captureInterval = 60000;
 
 // =====================================================
 // FOTO
 // =====================================================
 
 int photoNumber = 0;
-
 String lastPhoto = "none";
 
 // =====================================================
-// TIMER PROXIMITY
+// STATUS
 // =====================================================
+
+bool firebaseStatus = false;
+bool autoMode = true;
+
+bool wadahPenuh = false;
+bool objectDetected = false;
 
 unsigned long objectStartTime = 0;
 
-bool objectDetected = false;
+String cahayaStatus;
+String relayStatus;
 
-bool wadahPenuh = false;
+bool alatAktif = false;
+
+// =====================================================
+// FIREBASE READ
+// =====================================================
+
+void bacaFirebase() {
+
+  if(WiFi.status() == WL_CONNECTED){
+
+    HTTPClient http;
+
+    // =========================
+    // STATUS
+    // =========================
+
+    http.begin(statusURL);
+
+    int httpCode = http.GET();
+
+    if(httpCode > 0){
+
+      String payload = http.getString();
+
+      payload.trim();
+
+      firebaseStatus =
+      (payload == "true");
+    }
+
+    http.end();
+
+    // =========================
+    // AUTO MODE
+    // =========================
+
+    http.begin(autoModeURL);
+
+    httpCode = http.GET();
+
+    if(httpCode > 0){
+
+      String payload = http.getString();
+
+      payload.trim();
+
+      autoMode =
+      (payload == "true");
+    }
+
+    http.end();
+  }
+}
 
 // =====================================================
 // SETUP
@@ -88,32 +147,23 @@ void setup() {
 
   Serial.begin(115200);
 
-  Serial.println();
-
-  Serial.println("SMART PEST TRAP START");
-
-  // =====================================================
-  // PIN MODE
-  // =====================================================
-
   pinMode(LIGHT_SENSOR, INPUT);
 
   pinMode(PROX_SENSOR, INPUT);
 
   pinMode(RELAY, OUTPUT);
 
-  // relay OFF awal
   digitalWrite(RELAY, HIGH);
 
   // =====================================================
-  // WIFI CONNECT
+  // WIFI
   // =====================================================
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  Serial.print("Connecting WiFi");
+  Serial.print("CONNECTING WIFI");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while(WiFi.status() != WL_CONNECTED){
 
     delay(500);
 
@@ -121,15 +171,10 @@ void setup() {
   }
 
   Serial.println();
-
   Serial.println("WIFI CONNECTED");
 
-  Serial.print("IP : ");
-
-  Serial.println(WiFi.localIP());
-
   // =====================================================
-  // CAMERA CONFIG
+  // CAMERA
   // =====================================================
 
   camera_config_t config;
@@ -161,11 +206,8 @@ void setup() {
 
   config.pixel_format = PIXFORMAT_JPEG;
 
-  // ukuran ringan & stabil
   config.frame_size = FRAMESIZE_QVGA;
 
-  // kualitas sedang
-  // makin besar angka = makin kecil size
   config.jpeg_quality = 15;
 
   config.fb_count = 1;
@@ -173,12 +215,9 @@ void setup() {
   esp_err_t err =
   esp_camera_init(&config);
 
-  if (err != ESP_OK) {
+  if(err != ESP_OK){
 
-    Serial.printf(
-      "Camera init failed: 0x%x\n",
-      err
-    );
+    Serial.println("CAMERA FAILED");
 
     return;
   }
@@ -197,8 +236,6 @@ void setup() {
   }
 
   Serial.println("SD CARD OK");
-
-  Serial.println("======================");
 }
 
 // =====================================================
@@ -208,24 +245,17 @@ void setup() {
 void loop() {
 
   // =====================================================
-  // READ SENSOR
+  // READ FIREBASE
+  // =====================================================
+
+  bacaFirebase();
+
+  // =====================================================
+  // LIGHT SENSOR
   // =====================================================
 
   int lightValue =
   digitalRead(LIGHT_SENSOR);
-
-  int proxValue =
-  digitalRead(PROX_SENSOR);
-
-  String cahayaStatus;
-
-  String relayStatus;
-
-  String wadahStatus;
-
-  // =====================================================
-  // SENSOR CAHAYA
-  // =====================================================
 
   if(lightValue == HIGH){
 
@@ -237,22 +267,21 @@ void loop() {
   }
 
   // =====================================================
-  // SENSOR PROXIMITY
+  // PROXIMITY
   // =====================================================
+
+  int proxValue =
+  digitalRead(PROX_SENSOR);
 
   if(proxValue == LOW){
 
-    // pertama kali deteksi
     if(!objectDetected){
 
       objectDetected = true;
 
       objectStartTime = millis();
-
-      Serial.println("OBJECT DETECTED");
     }
 
-    // jika objek diam 1 menit
     if(millis() - objectStartTime >= 60000){
 
       wadahPenuh = true;
@@ -260,33 +289,31 @@ void loop() {
   }
   else{
 
-    // reset jika objek hilang
     objectDetected = false;
 
     wadahPenuh = false;
   }
 
   // =====================================================
-  // STATUS WADAH
+  // AUTO / MANUAL MODE
   // =====================================================
 
-  if(wadahPenuh){
+  if(autoMode){
 
-    wadahStatus = "PENUH";
+    alatAktif =
+    (lightValue == HIGH && !wadahPenuh);
   }
   else{
 
-    wadahStatus = "BELUM PENUH";
+    alatAktif =
+    firebaseStatus;
   }
 
   // =====================================================
   // RELAY
   // =====================================================
 
-  // relay ON jika:
-  // GELAP + WADAH BELUM PENUH
-
-  if(lightValue == HIGH && !wadahPenuh){
+  if(alatAktif){
 
     digitalWrite(RELAY, LOW);
 
@@ -300,39 +327,17 @@ void loop() {
   }
 
   // =====================================================
-  // SERIAL MONITOR
-  // =====================================================
-
-  Serial.print("CAHAYA : ");
-
-  Serial.println(cahayaStatus);
-
-  Serial.print("WADAH  : ");
-
-  Serial.println(wadahStatus);
-
-  Serial.print("RELAY  : ");
-
-  Serial.println(relayStatus);
-
-  // =====================================================
-  // CAPTURE FOTO TIAP 1 MENIT
+  // FOTO
   // =====================================================
 
   if(millis() - lastCapture >= captureInterval){
 
     lastCapture = millis();
 
-    Serial.println("CAPTURING PHOTO...");
-
     camera_fb_t * fb =
     esp_camera_fb_get();
 
-    if(!fb){
-
-      Serial.println("CAPTURE FAILED");
-    }
-    else{
+    if(fb){
 
       String path =
       "/photo" +
@@ -342,19 +347,11 @@ void loop() {
       File file =
       SD_MMC.open(path.c_str(), FILE_WRITE);
 
-      if(!file){
-
-        Serial.println("FILE FAILED");
-      }
-      else{
+      if(file){
 
         file.write(fb->buf, fb->len);
 
         file.close();
-
-        Serial.println("PHOTO SAVED");
-
-        Serial.println(path);
 
         lastPhoto = path;
 
@@ -366,24 +363,64 @@ void loop() {
   }
 
   // =====================================================
-  // JSON FIREBASE
+  // DATA
+  // =====================================================
+
+  int trapPercent =
+  wadahPenuh ? 100 : 20;
+
+  int batteryPercent = 80;
+
+  int powerConsumption = 65;
+
+  // =====================================================
+  // JSON
   // =====================================================
 
   String jsonData = "{";
 
-  jsonData += "\"cahaya\":\"" + cahayaStatus + "\",";
+  jsonData += "\"status\":";
+  jsonData += (alatAktif ? "true" : "false");
+  jsonData += ",";
 
-  jsonData += "\"wadah\":\"" + wadahStatus + "\",";
+  jsonData += "\"auto_mode\":";
+  jsonData += (autoMode ? "true" : "false");
+  jsonData += ",";
 
-  jsonData += "\"relay\":\"" + relayStatus + "\",";
+  jsonData += "\"cahaya\":\"";
+  jsonData += cahayaStatus;
+  jsonData += "\",";
+
+  jsonData += "\"relay\":\"";
+  jsonData += relayStatus;
+  jsonData += "\",";
 
   jsonData += "\"kamera\":\"AKTIF\",";
 
-  jsonData += "\"foto_terakhir\":\"" + lastPhoto + "\"";
+  jsonData += "\"foto_terakhir\":\"";
+  jsonData += lastPhoto;
+  jsonData += "\",";
 
+  jsonData += "\"trap_fullness\":";
+  jsonData += String(trapPercent);
+  jsonData += ",";
+
+  jsonData += "\"power_consumption\":";
+  jsonData += String(powerConsumption);
+  jsonData += ",";
+
+  jsonData += "\"battery\":{";
+  jsonData += "\"percent\":";
+  jsonData += String(batteryPercent);
+  jsonData += "},";
+
+  jsonData += "\"operation_mode\":{";
+  jsonData += "\"days\":\"0,1,2,3,4\",";
+  jsonData += "\"start_time\":\"18:00\",";
+  jsonData += "\"end_time\":\"06:00\"";
   jsonData += "}";
 
-  Serial.println(jsonData);
+  jsonData += "}";
 
   // =====================================================
   // SEND FIREBASE
@@ -403,23 +440,29 @@ void loop() {
     int httpResponseCode =
     http.PUT(jsonData);
 
-    if(httpResponseCode > 0){
-
-      Serial.print("SEND SUCCESS : ");
-
-      Serial.println(httpResponseCode);
-    }
-    else{
-
-      Serial.print("SEND FAILED : ");
-
-      Serial.println(httpResponseCode);
-    }
+    Serial.print("FIREBASE : ");
+    Serial.println(httpResponseCode);
 
     http.end();
   }
 
+  // =====================================================
+  // SERIAL
+  // =====================================================
+
   Serial.println("======================");
+
+  Serial.print("AUTO MODE : ");
+  Serial.println(autoMode);
+
+  Serial.print("STATUS : ");
+  Serial.println(alatAktif);
+
+  Serial.print("RELAY : ");
+  Serial.println(relayStatus);
+
+  Serial.print("CAHAYA : ");
+  Serial.println(cahayaStatus);
 
   delay(3000);
 }
