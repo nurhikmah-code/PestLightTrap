@@ -1,28 +1,24 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WebServer.h>
 #include "esp_camera.h"
 #include "FS.h"
 #include "SD_MMC.h"
 
-// =====================================================
+
 // WIFI
-// =====================================================
 
-#define WIFI_SSID "manes"
-#define WIFI_PASSWORD "Kalem900"
+#define WIFI_SSID "hikmah"
+#define WIFI_PASSWORD "22Sept05"
 
-// =====================================================
 // SENSOR & RELAY
-// =====================================================
 
 #define LIGHT_SENSOR 14
 #define PROX_SENSOR 13
 #define RELAY 12
 
-// =====================================================
 // FIREBASE URL
-// =====================================================
 
 String firebaseURL =
 "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap.json";
@@ -33,9 +29,7 @@ String statusURL =
 String autoModeURL =
 "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/auto_mode.json";
 
-// =====================================================
 // CAMERA PIN AI THINKER
-// =====================================================
 
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
@@ -56,26 +50,20 @@ String autoModeURL =
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-// =====================================================
 // TIMER CAMERA
-// =====================================================
 
 unsigned long lastCapture = 0;
 
 const unsigned long captureInterval =
 60000;
 
-// =====================================================
 // FOTO
-// =====================================================
 
 int photoNumber = 0;
 
 String lastPhoto = "none";
 
-// =====================================================
 // STATUS
-// =====================================================
 
 bool firebaseStatus = false;
 
@@ -93,9 +81,34 @@ String cahayaStatus;
 
 String relayStatus;
 
-// =====================================================
+#include <WebServer.h>
+
+WebServer server(80);
+
+void handleCapture() {
+
+  camera_fb_t * fb = esp_camera_fb_get();
+
+  if (!fb) {
+
+    server.send(500, "text/plain", "Camera Error");
+
+    return;
+  }
+
+  WiFiClient client = server.client();
+
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: image/jpeg");
+  client.println("Connection: close");
+  client.println();
+
+  client.write(fb->buf, fb->len);
+
+  esp_camera_fb_return(fb);
+}
+
 // BACA FIREBASE
-// =====================================================
 
 void bacaFirebase() {
 
@@ -103,10 +116,8 @@ void bacaFirebase() {
 
     HTTPClient http;
 
-    // =========================================
     // STATUS
-    // =========================================
-
+  
     http.begin(statusURL);
 
     int httpCode = http.GET();
@@ -137,10 +148,8 @@ void bacaFirebase() {
 
     http.end();
 
-    // =========================================
     // AUTO MODE
-    // =========================================
-
+   
     http.begin(autoModeURL);
 
     httpCode = http.GET();
@@ -184,6 +193,8 @@ void setup() {
   Serial.println();
 
   Serial.println("SMART PEST TRAP");
+  server.on("/capture", HTTP_GET, handleCapture);
+server.begin();
 
   // =====================================================
   // PIN MODE
@@ -281,20 +292,51 @@ void setup() {
 
   Serial.println("CAMERA OK");
 
-  // =====================================================
-  // SD CARD
-  // =====================================================
+// SD CARD
 
-  if(!SD_MMC.begin()){
+if(!SD_MMC.begin("/sdcard", true)){
 
-    Serial.println("SD CARD FAILED");
+  Serial.println("SD CARD FAILED");
 
-    return;
-  }
+  return;
+}
 
-  Serial.println("SD CARD OK");
+uint8_t cardType = SD_MMC.cardType();
 
-  Serial.println("======================");
+if(cardType == CARD_NONE){
+
+  Serial.println("NO SD CARD");
+
+  return;
+}
+
+Serial.println("SD CARD OK");
+
+Serial.print("CARD TYPE : ");
+
+if(cardType == CARD_MMC){
+
+  Serial.println("MMC");
+}
+else if(cardType == CARD_SD){
+
+  Serial.println("SDSC");
+}
+else if(cardType == CARD_SDHC){
+
+  Serial.println("SDHC");
+}
+else{
+
+  Serial.println("UNKNOWN");
+}
+
+uint64_t cardSize =
+SD_MMC.cardSize() / (1024 * 1024);
+
+Serial.print("CARD SIZE : ");
+Serial.print(cardSize);
+Serial.println(" MB");
 }
 
 // =====================================================
