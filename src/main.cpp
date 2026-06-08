@@ -6,7 +6,6 @@
 #include "FS.h"
 #include "SD_MMC.h"
 
-
 // WIFI
 
 #define WIFI_SSID "hikmah"
@@ -21,41 +20,41 @@
 // FIREBASE URL
 
 String firebaseURL =
-"https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap.json";
+    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap.json";
 
 String statusURL =
-"https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/status.json";
+    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/status.json";
 
 String autoModeURL =
-"https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/auto_mode.json";
+    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/auto_mode.json";
 
 // CAMERA PIN AI THINKER
 
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
+#define PWDN_GPIO_NUM 32
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM 0
+#define SIOD_GPIO_NUM 26
+#define SIOC_GPIO_NUM 27
 
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
+#define Y9_GPIO_NUM 35
+#define Y8_GPIO_NUM 34
+#define Y7_GPIO_NUM 39
+#define Y6_GPIO_NUM 36
+#define Y5_GPIO_NUM 21
+#define Y4_GPIO_NUM 19
+#define Y3_GPIO_NUM 18
+#define Y2_GPIO_NUM 5
 
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+#define VSYNC_GPIO_NUM 25
+#define HREF_GPIO_NUM 23
+#define PCLK_GPIO_NUM 22
 
 // TIMER CAMERA
 
 unsigned long lastCapture = 0;
 
 const unsigned long captureInterval =
-60000;
+    60000;
 
 // FOTO
 
@@ -81,15 +80,15 @@ String cahayaStatus;
 
 String relayStatus;
 
-#include <WebServer.h>
-
 WebServer server(80);
 
-void handleCapture() {
+void handleCapture()
+{
 
-  camera_fb_t * fb = esp_camera_fb_get();
+  camera_fb_t *fb = esp_camera_fb_get();
 
-  if (!fb) {
+  if (!fb)
+  {
 
     server.send(500, "text/plain", "Camera Error");
 
@@ -110,38 +109,44 @@ void handleCapture() {
 
 // BACA FIREBASE
 
-void bacaFirebase() {
+void bacaFirebase()
+{
 
-  if(WiFi.status() == WL_CONNECTED){
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
     HTTPClient http;
 
     // STATUS
-  
+
     http.begin(statusURL);
 
     int httpCode = http.GET();
 
-    if(httpCode > 0){
+    if (httpCode > 0)
+    {
 
       String payload =
-      http.getString();
+          http.getString();
 
       payload.trim();
 
       Serial.print("PAYLOAD STATUS : ");
       Serial.println(payload);
 
-      if(payload == "true"){
+      if (payload == "true")
+      {
 
         firebaseStatus = true;
       }
-      else{
+      else
+      {
 
         firebaseStatus = false;
       }
     }
-    else{
+    else
+    {
 
       Serial.println("FAILED GET STATUS");
     }
@@ -149,31 +154,35 @@ void bacaFirebase() {
     http.end();
 
     // AUTO MODE
-   
+
     http.begin(autoModeURL);
 
     httpCode = http.GET();
 
-    if(httpCode > 0){
+    if (httpCode > 0)
+    {
 
       String payload =
-      http.getString();
+          http.getString();
 
       payload.trim();
 
       Serial.print("PAYLOAD AUTO : ");
       Serial.println(payload);
 
-      if(payload == "true"){
+      if (payload == "true")
+      {
 
         autoMode = true;
       }
-      else{
+      else
+      {
 
         autoMode = false;
       }
     }
-    else{
+    else
+    {
 
       Serial.println("FAILED GET AUTO MODE");
     }
@@ -186,15 +195,14 @@ void bacaFirebase() {
 // SETUP
 // =====================================================
 
-void setup() {
+void setup()
+{
 
   Serial.begin(115200);
 
   Serial.println();
 
   Serial.println("SMART PEST TRAP");
-  server.on("/capture", HTTP_GET, handleCapture);
-server.begin();
 
   // =====================================================
   // PIN MODE
@@ -214,13 +222,13 @@ server.begin();
   // =====================================================
 
   WiFi.begin(
-    WIFI_SSID,
-    WIFI_PASSWORD
-  );
+      WIFI_SSID,
+      WIFI_PASSWORD);
 
   Serial.print("CONNECTING WIFI");
 
-  while(WiFi.status() != WL_CONNECTED){
+  while (WiFi.status() != WL_CONNECTED)
+  {
 
     delay(500);
 
@@ -234,6 +242,10 @@ server.begin();
   Serial.print("IP : ");
 
   Serial.println(WiFi.localIP());
+  server.on("/capture", HTTP_GET, handleCapture);
+  server.begin();
+
+  Serial.println("WEB SERVER STARTED");
 
   // =====================================================
   // CAMERA CONFIG
@@ -281,9 +293,10 @@ server.begin();
   config.fb_count = 1;
 
   esp_err_t err =
-  esp_camera_init(&config);
+      esp_camera_init(&config);
 
-  if(err != ESP_OK){
+  if (err != ESP_OK)
+  {
 
     Serial.println("CAMERA FAILED");
 
@@ -292,58 +305,68 @@ server.begin();
 
   Serial.println("CAMERA OK");
 
-// SD CARD
+  // SD CARD
 
-if(!SD_MMC.begin("/sdcard", true)){
+  if (!SD_MMC.begin("/sdcard", true))
+  {
 
-  Serial.println("SD CARD FAILED");
+    Serial.println("SD CARD FAILED");
 
-  return;
-}
+    return;
+  }
 
-uint8_t cardType = SD_MMC.cardType();
+  uint8_t cardType = SD_MMC.cardType();
 
-if(cardType == CARD_NONE){
+  if (cardType == CARD_NONE)
+  {
 
-  Serial.println("NO SD CARD");
+    Serial.println("NO SD CARD");
 
-  return;
-}
+    return;
+  }
 
-Serial.println("SD CARD OK");
+  Serial.println("SD CARD OK");
 
-Serial.print("CARD TYPE : ");
+  Serial.print("CARD TYPE : ");
 
-if(cardType == CARD_MMC){
+  if (cardType == CARD_MMC)
+  {
 
-  Serial.println("MMC");
-}
-else if(cardType == CARD_SD){
+    Serial.println("MMC");
+  }
+  else if (cardType == CARD_SD)
+  {
 
-  Serial.println("SDSC");
-}
-else if(cardType == CARD_SDHC){
+    Serial.println("SDSC");
+  }
+  else if (cardType == CARD_SDHC)
+  {
 
-  Serial.println("SDHC");
-}
-else{
+    Serial.println("SDHC");
+  }
+  else
+  {
 
-  Serial.println("UNKNOWN");
-}
+    Serial.println("UNKNOWN");
+  }
 
-uint64_t cardSize =
-SD_MMC.cardSize() / (1024 * 1024);
+  uint64_t cardSize =
+      SD_MMC.cardSize() / (1024 * 1024);
 
-Serial.print("CARD SIZE : ");
-Serial.print(cardSize);
-Serial.println(" MB");
+  Serial.print("CARD SIZE : ");
+  Serial.print(cardSize);
+  Serial.println(" MB");
 }
 
 // =====================================================
 // LOOP
 // =====================================================
 
-void loop() {
+void loop()
+{
+  server.handleClient();
+
+  bacaFirebase();
 
   // =====================================================
   // BACA FIREBASE
@@ -355,28 +378,31 @@ void loop() {
   // SENSOR CAHAYA
   // =====================================================
 
-  int lightValue =
-  digitalRead(LIGHT_SENSOR);
+  int lightValue = analogRead(LIGHT_SENSOR);
 
-  if(lightValue == HIGH){
+  Serial.print("LIGHT VALUE = ");
+  Serial.println(lightValue);
 
-    cahayaStatus = "GELAP";
-  }
-  else{
-
+  if (lightValue == HIGH)
+  {
     cahayaStatus = "TERANG";
   }
-
+  else
+  {
+    cahayaStatus = "GELAP";
+  }
   // =====================================================
   // SENSOR PROXIMITY
   // =====================================================
 
   int proxValue =
-  digitalRead(PROX_SENSOR);
+      digitalRead(PROX_SENSOR);
 
-  if(proxValue == LOW){
+  if (proxValue == LOW)
+  {
 
-    if(!objectDetected){
+    if (!objectDetected)
+    {
 
       objectDetected = true;
 
@@ -385,12 +411,14 @@ void loop() {
       Serial.println("OBJECT DETECTED");
     }
 
-    if(millis() - objectStartTime >= 60000){
+    if (millis() - objectStartTime >= 60000)
+    {
 
       wadahPenuh = true;
     }
   }
-  else{
+  else
+  {
 
     objectDetected = false;
 
@@ -401,33 +429,37 @@ void loop() {
   // MODE OTOMATIS
   // =====================================================
 
-  if(autoMode){
+  if (autoMode)
+  {
 
     alatAktif =
-    (lightValue == HIGH && !wadahPenuh);
+        (lightValue == LOW && !wadahPenuh);
   }
 
   // =====================================================
   // MODE MANUAL
   // =====================================================
 
-  else{
+  else
+  {
 
     alatAktif =
-    firebaseStatus;
+        firebaseStatus;
   }
 
   // =====================================================
   // RELAY
   // =====================================================
 
-  if(alatAktif){
+  if (alatAktif)
+  {
 
     digitalWrite(RELAY, LOW);
 
     relayStatus = "ON";
   }
-  else{
+  else
+  {
 
     digitalWrite(RELAY, HIGH);
 
@@ -438,34 +470,35 @@ void loop() {
   // FOTO
   // =====================================================
 
-  if(millis() - lastCapture >= captureInterval){
+  if (millis() - lastCapture >= captureInterval)
+  {
 
     lastCapture = millis();
 
     Serial.println("CAPTURING PHOTO");
 
-    camera_fb_t * fb =
-    esp_camera_fb_get();
+    camera_fb_t *fb =
+        esp_camera_fb_get();
 
-    if(fb){
+    if (fb)
+    {
 
       String path =
-      "/photo" +
-      String(photoNumber) +
-      ".jpg";
+          "/photo" +
+          String(photoNumber) +
+          ".jpg";
 
       File file =
-      SD_MMC.open(
-        path.c_str(),
-        FILE_WRITE
-      );
+          SD_MMC.open(
+              path.c_str(),
+              FILE_WRITE);
 
-      if(file){
+      if (file)
+      {
 
         file.write(
-          fb->buf,
-          fb->len
-        );
+            fb->buf,
+            fb->len);
 
         file.close();
 
@@ -480,7 +513,8 @@ void loop() {
 
       esp_camera_fb_return(fb);
     }
-    else{
+    else
+    {
 
       Serial.println("CAPTURE FAILED");
     }
@@ -492,11 +526,13 @@ void loop() {
 
   int trapPercent;
 
-  if(wadahPenuh){
+  if (wadahPenuh)
+  {
 
     trapPercent = 100;
   }
-  else{
+  else
+  {
 
     trapPercent = 20;
   }
@@ -518,7 +554,7 @@ void loop() {
   jsonData += "\"status\":";
 
   jsonData +=
-  (firebaseStatus ? "true" : "false");
+      (firebaseStatus ? "true" : "false");
 
   jsonData += ",";
 
@@ -529,7 +565,7 @@ void loop() {
   jsonData += "\"auto_mode\":";
 
   jsonData +=
-  (autoMode ? "true" : "false");
+      (autoMode ? "true" : "false");
 
   jsonData += ",";
 
@@ -601,19 +637,19 @@ void loop() {
   // SEND FIREBASE
   // =====================================================
 
-  if(WiFi.status() == WL_CONNECTED){
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
     HTTPClient http;
 
     http.begin(firebaseURL);
 
     http.addHeader(
-      "Content-Type",
-      "application/json"
-    );
+        "Content-Type",
+        "application/json");
 
     int httpResponseCode =
-    http.PUT(jsonData);
+        http.PUT(jsonData);
 
     Serial.print("FIREBASE RESPONSE : ");
 
