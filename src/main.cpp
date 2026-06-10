@@ -1,35 +1,40 @@
-#include <Arduino.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <WebServer.h>
-#include "esp_camera.h"
 #include "FS.h"
 #include "SD_MMC.h"
+#include "esp_camera.h"
+#include <Arduino.h>
+#include <HTTPClient.h>
+#include <WebServer.h>
+#include <WiFi.h>
+
 
 // WIFI
-
-#define WIFI_SSID "hikmah"
-#define WIFI_PASSWORD "22Sept05"
+#define WIFI_SSID "Ramadhani"
+#define WIFI_PASSWORD "lemkaca2"
 
 // SENSOR & RELAY
-
 #define LIGHT_SENSOR 14
 #define PROX_SENSOR 13
 #define RELAY 12
 
-// FIREBASE URL
+// =====================================================
+// FIREBASE URL (Diperbarui sesuai struktur baru)
+// =====================================================
+// Tembak langsung ke Root menggunakan metode PATCH
+String firebaseURL = "https://"
+                     "smart-pest-trap-81a41-default-rtdb.asia-southeast1."
+                     "firebasedatabase.app/.json";
 
-String firebaseURL =
-    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap.json";
+// Status tetap di dalam smart_pest_trap
+String statusURL = "https://"
+                   "smart-pest-trap-81a41-default-rtdb.asia-southeast1."
+                   "firebasedatabase.app/smart_pest_trap/status.json";
 
-String statusURL =
-    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/status.json";
-
-String autoModeURL =
-    "https://smart-pest-trap-81a41-default-rtdb.asia-southeast1.firebasedatabase.app/smart_pest_trap/auto_mode.json";
+// Auto Mode dipindah ke Root
+String autoModeURL = "https://"
+                     "smart-pest-trap-81a41-default-rtdb.asia-southeast1."
+                     "firebasedatabase.app/auto_mode.json";
 
 // CAMERA PIN AI THINKER
-
 #define PWDN_GPIO_NUM 32
 #define RESET_GPIO_NUM -1
 #define XCLK_GPIO_NUM 0
@@ -50,143 +55,79 @@ String autoModeURL =
 #define PCLK_GPIO_NUM 22
 
 // TIMER CAMERA
-
 unsigned long lastCapture = 0;
-
-const unsigned long captureInterval =
-    60000;
+const unsigned long captureInterval = 60000;
 
 // FOTO
-
 int photoNumber = 0;
-
 String lastPhoto = "none";
 
-// STATUS
-
+// STATUS VARIABEL
 bool firebaseStatus = false;
-
 bool autoMode = false;
-
 bool wadahPenuh = false;
-
 bool objectDetected = false;
-
 bool alatAktif = false;
-
 unsigned long objectStartTime = 0;
-
 String cahayaStatus;
-
 String relayStatus;
 
 WebServer server(80);
 
-void handleCapture()
-{
-
+void handleCapture() {
   camera_fb_t *fb = esp_camera_fb_get();
-
-  if (!fb)
-  {
-
+  if (!fb) {
     server.send(500, "text/plain", "Camera Error");
-
     return;
   }
-
   WiFiClient client = server.client();
-
   client.println("HTTP/1.1 200 OK");
   client.println("Content-Type: image/jpeg");
   client.println("Connection: close");
   client.println();
-
   client.write(fb->buf, fb->len);
-
   esp_camera_fb_return(fb);
 }
 
 // BACA FIREBASE
-
-void bacaFirebase()
-{
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-
+void bacaFirebase() {
+  if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
-    // STATUS
-
+    // BACA STATUS
     http.begin(statusURL);
-
     int httpCode = http.GET();
-
-    if (httpCode > 0)
-    {
-
-      String payload =
-          http.getString();
-
+    if (httpCode > 0) {
+      String payload = http.getString();
       payload.trim();
-
       Serial.print("PAYLOAD STATUS : ");
       Serial.println(payload);
-
-      if (payload == "true")
-      {
-
+      if (payload == "true") {
         firebaseStatus = true;
-      }
-      else
-      {
-
+      } else {
         firebaseStatus = false;
       }
-    }
-    else
-    {
-
+    } else {
       Serial.println("FAILED GET STATUS");
     }
-
     http.end();
 
-    // AUTO MODE
-
+    // BACA AUTO MODE
     http.begin(autoModeURL);
-
     httpCode = http.GET();
-
-    if (httpCode > 0)
-    {
-
-      String payload =
-          http.getString();
-
+    if (httpCode > 0) {
+      String payload = http.getString();
       payload.trim();
-
       Serial.print("PAYLOAD AUTO : ");
       Serial.println(payload);
-
-      if (payload == "true")
-      {
-
+      if (payload == "true") {
         autoMode = true;
-      }
-      else
-      {
-
+      } else {
         autoMode = false;
       }
-    }
-    else
-    {
-
+    } else {
       Serial.println("FAILED GET AUTO MODE");
     }
-
     http.end();
   }
 }
@@ -195,68 +136,39 @@ void bacaFirebase()
 // SETUP
 // =====================================================
 
-void setup()
-{
-
+void setup() {
   Serial.begin(115200);
-
   Serial.println();
-
   Serial.println("SMART PEST TRAP");
 
-  // =====================================================
   // PIN MODE
-  // =====================================================
-
   pinMode(LIGHT_SENSOR, INPUT);
-
   pinMode(PROX_SENSOR, INPUT);
-
   pinMode(RELAY, OUTPUT);
 
   // relay OFF awal
   digitalWrite(RELAY, HIGH);
 
-  // =====================================================
   // WIFI
-  // =====================================================
-
-  WiFi.begin(
-      WIFI_SSID,
-      WIFI_PASSWORD);
-
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("CONNECTING WIFI");
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
-
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-
     Serial.print(".");
   }
-
   Serial.println();
-
   Serial.println("WIFI CONNECTED");
-
   Serial.print("IP : ");
-
   Serial.println(WiFi.localIP());
+
   server.on("/capture", HTTP_GET, handleCapture);
   server.begin();
-
   Serial.println("WEB SERVER STARTED");
 
-  // =====================================================
   // CAMERA CONFIG
-  // =====================================================
-
   camera_config_t config;
-
   config.ledc_channel = LEDC_CHANNEL_0;
-
   config.ledc_timer = LEDC_TIMER_0;
-
   config.pin_d0 = Y2_GPIO_NUM;
   config.pin_d1 = Y3_GPIO_NUM;
   config.pin_d2 = Y4_GPIO_NUM;
@@ -265,425 +177,186 @@ void setup()
   config.pin_d5 = Y7_GPIO_NUM;
   config.pin_d6 = Y8_GPIO_NUM;
   config.pin_d7 = Y9_GPIO_NUM;
-
   config.pin_xclk = XCLK_GPIO_NUM;
-
   config.pin_pclk = PCLK_GPIO_NUM;
-
   config.pin_vsync = VSYNC_GPIO_NUM;
-
   config.pin_href = HREF_GPIO_NUM;
-
   config.pin_sccb_sda = SIOD_GPIO_NUM;
-
   config.pin_sccb_scl = SIOC_GPIO_NUM;
-
   config.pin_pwdn = PWDN_GPIO_NUM;
-
   config.pin_reset = RESET_GPIO_NUM;
-
   config.xclk_freq_hz = 20000000;
-
   config.pixel_format = PIXFORMAT_JPEG;
-
   config.frame_size = FRAMESIZE_QVGA;
-
   config.jpeg_quality = 15;
-
   config.fb_count = 1;
 
-  esp_err_t err =
-      esp_camera_init(&config);
-
-  if (err != ESP_OK)
-  {
-
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
     Serial.println("CAMERA FAILED");
-
     return;
   }
-
   Serial.println("CAMERA OK");
 
   // SD CARD
-
-  if (!SD_MMC.begin("/sdcard", true))
-  {
-
+  if (!SD_MMC.begin("/sdcard", true)) {
     Serial.println("SD CARD FAILED");
-
     return;
   }
 
   uint8_t cardType = SD_MMC.cardType();
-
-  if (cardType == CARD_NONE)
-  {
-
+  if (cardType == CARD_NONE) {
     Serial.println("NO SD CARD");
-
     return;
   }
 
   Serial.println("SD CARD OK");
-
-  Serial.print("CARD TYPE : ");
-
-  if (cardType == CARD_MMC)
-  {
-
-    Serial.println("MMC");
-  }
-  else if (cardType == CARD_SD)
-  {
-
-    Serial.println("SDSC");
-  }
-  else if (cardType == CARD_SDHC)
-  {
-
-    Serial.println("SDHC");
-  }
-  else
-  {
-
-    Serial.println("UNKNOWN");
-  }
-
-  uint64_t cardSize =
-      SD_MMC.cardSize() / (1024 * 1024);
-
-  Serial.print("CARD SIZE : ");
-  Serial.print(cardSize);
-  Serial.println(" MB");
 }
 
 // =====================================================
 // LOOP
 // =====================================================
 
-void loop()
-{
+void loop() {
   server.handleClient();
-
   bacaFirebase();
 
-  // =====================================================
-  // BACA FIREBASE
-  // =====================================================
-
-  bacaFirebase();
-
-  // =====================================================
   // SENSOR CAHAYA
-  // =====================================================
-
   int lightValue = analogRead(LIGHT_SENSOR);
-
-  Serial.print("LIGHT VALUE = ");
-  Serial.println(lightValue);
-
-  if (lightValue == HIGH)
-  {
+  if (lightValue == HIGH) {
     cahayaStatus = "TERANG";
-  }
-  else
-  {
+  } else {
     cahayaStatus = "GELAP";
   }
-  // =====================================================
+
   // SENSOR PROXIMITY
-  // =====================================================
-
-  int proxValue =
-      digitalRead(PROX_SENSOR);
-
-  if (proxValue == LOW)
-  {
-
-    if (!objectDetected)
-    {
-
+  int proxValue = digitalRead(PROX_SENSOR);
+  if (proxValue == LOW) {
+    if (!objectDetected) {
       objectDetected = true;
-
       objectStartTime = millis();
-
       Serial.println("OBJECT DETECTED");
     }
-
-    if (millis() - objectStartTime >= 60000)
-    {
-
+    if (millis() - objectStartTime >= 60000) {
       wadahPenuh = true;
     }
-  }
-  else
-  {
-
+  } else {
     objectDetected = false;
-
     wadahPenuh = false;
   }
 
-  // =====================================================
-  // MODE OTOMATIS
-  // =====================================================
-
-  if (autoMode)
-  {
-
-    alatAktif =
-        (lightValue == LOW && !wadahPenuh);
+  // MODE OTOMATIS vs MANUAL
+  if (autoMode) {
+    alatAktif = (lightValue == LOW && !wadahPenuh);
+  } else {
+    alatAktif = firebaseStatus;
   }
 
-  // =====================================================
-  // MODE MANUAL
-  // =====================================================
-
-  else
-  {
-
-    alatAktif =
-        firebaseStatus;
-  }
-
-  // =====================================================
   // RELAY
-  // =====================================================
-
-  if (alatAktif)
-  {
-
+  if (alatAktif) {
     digitalWrite(RELAY, LOW);
-
     relayStatus = "ON";
-  }
-  else
-  {
-
+  } else {
     digitalWrite(RELAY, HIGH);
-
     relayStatus = "OFF";
   }
 
-  // =====================================================
   // FOTO
-  // =====================================================
-
-  if (millis() - lastCapture >= captureInterval)
-  {
-
+  if (millis() - lastCapture >= captureInterval) {
     lastCapture = millis();
-
-    Serial.println("CAPTURING PHOTO");
-
-    camera_fb_t *fb =
-        esp_camera_fb_get();
-
-    if (fb)
-    {
-
-      String path =
-          "/photo" +
-          String(photoNumber) +
-          ".jpg";
-
-      File file =
-          SD_MMC.open(
-              path.c_str(),
-              FILE_WRITE);
-
-      if (file)
-      {
-
-        file.write(
-            fb->buf,
-            fb->len);
-
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (fb) {
+      String path = "/photo" + String(photoNumber) + ".jpg";
+      File file = SD_MMC.open(path.c_str(), FILE_WRITE);
+      if (file) {
+        file.write(fb->buf, fb->len);
         file.close();
-
-        Serial.println("PHOTO SAVED");
-
-        Serial.println(path);
-
         lastPhoto = path;
-
         photoNumber++;
       }
-
       esp_camera_fb_return(fb);
     }
-    else
-    {
-
-      Serial.println("CAPTURE FAILED");
-    }
   }
 
-  // =====================================================
-  // DATA SENSOR
-  // =====================================================
-
-  int trapPercent;
-
-  if (wadahPenuh)
-  {
-
-    trapPercent = 100;
-  }
-  else
-  {
-
-    trapPercent = 20;
-  }
-
-  int batteryPercent = 80;
-
-  int powerConsumption = 65;
+  // PREPARASI DATA SENSOR
+  int trapPercent = wadahPenuh ? 100 : 50;
+  int batteryPercent = 100;
+  int powerConsumption = 80;
 
   // =====================================================
-  // JSON FIREBASE
+  // JSON FIREBASE (Disusun ulang sesuai JSON Aplikasi Baru)
   // =====================================================
 
   String jsonData = "{";
 
-  // =========================================
-  // STATUS
-  // =========================================
-
-  jsonData += "\"status\":";
-
-  jsonData +=
-      (firebaseStatus ? "true" : "false");
-
-  jsonData += ",";
-
-  // =========================================
-  // AUTO MODE
-  // =========================================
-
-  jsonData += "\"auto_mode\":";
-
-  jsonData +=
-      (autoMode ? "true" : "false");
-
-  jsonData += ",";
-
-  // =========================================
-  // SENSOR
-  // =========================================
-
-  jsonData += "\"cahaya\":\"";
-
-  jsonData += cahayaStatus;
-
-  jsonData += "\",";
-
-  jsonData += "\"relay\":\"";
-
-  jsonData += relayStatus;
-
-  jsonData += "\",";
-
-  jsonData += "\"kamera\":\"AKTIF\",";
-
-  jsonData += "\"foto_terakhir\":\"";
-
-  jsonData += lastPhoto;
-
-  jsonData += "\",";
-
-  jsonData += "\"trap_fullness\":";
-
-  jsonData += String(trapPercent);
-
-  jsonData += ",";
-
-  jsonData += "\"power_consumption\":";
-
-  jsonData += String(powerConsumption);
-
-  jsonData += ",";
-
-  // =========================================
-  // BATTERY
-  // =========================================
-
-  jsonData += "\"battery\":{";
-
-  jsonData += "\"percent\":";
-
-  jsonData += String(batteryPercent);
-
+  // 1. smart_pest_trap
+  jsonData += "\"smart_pest_trap\":{";
+  jsonData += "\"status\":" + String(firebaseStatus ? "true" : "false");
   jsonData += "},";
 
-  // =========================================
-  // OPERATION MODE
-  // =========================================
-
+  // 2. operation_mode
   jsonData += "\"operation_mode\":{";
-
-  jsonData += "\"days\":\"0,1,2,3,4\",";
-
+  jsonData += "\"days\":\"0,1,2,3,4,5,6,\",";
   jsonData += "\"start_time\":\"18:00\",";
-
   jsonData += "\"end_time\":\"06:00\"";
+  jsonData += "},";
 
+  // 3. auto_mode
+  jsonData += "\"auto_mode\":" + String(autoMode ? "true" : "false") + ",";
+
+  // 4. trap_fullness
+  jsonData += "\"trap_fullness\":" + String(trapPercent) + ",";
+
+  // 5. power_consumption
+  jsonData += "\"power_consumption\":" + String(powerConsumption) + ",";
+
+  // 6. battery
+  jsonData += "\"battery\":{";
+  jsonData += "\"percent\":" + String(batteryPercent) + ",";
+  jsonData += "\"voltage\":\"12.6V\",";
+  jsonData += "\"health\":\"BAIK\"";
+  jsonData += "},";
+
+  // 7. trap_analysis
+  jsonData += "\"trap_analysis\":{";
+  jsonData += "\"durasi_siklus\":\"SIKLUS MALAM\",";
+  jsonData += "\"mulai\":\"18:00\",";
+  jsonData += "\"selesai\":\"06:00\",";
+  jsonData += "\"durasi\":\"12 JAM\"";
   jsonData += "}";
 
   jsonData += "}";
 
   // =====================================================
-  // SEND FIREBASE
+  // SEND FIREBASE (Menggunakan PATCH)
   // =====================================================
 
-  if (WiFi.status() == WL_CONNECTED)
-  {
-
+  if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-
     http.begin(firebaseURL);
+    http.addHeader("Content-Type", "application/json");
 
-    http.addHeader(
-        "Content-Type",
-        "application/json");
+    // Menggunakan PATCH agar tidak menimpa data lain di Root
+    int httpResponseCode = http.sendRequest("PATCH", jsonData);
 
-    int httpResponseCode =
-        http.PUT(jsonData);
-
-    Serial.print("FIREBASE RESPONSE : ");
-
+    Serial.print("FIREBASE SYNC CODE : ");
     Serial.println(httpResponseCode);
 
     http.end();
   }
 
-  // =====================================================
-  // SERIAL
-  // =====================================================
-
+  // SERIAL LOGGING
   Serial.println("======================");
-
   Serial.print("AUTO MODE : ");
-
   Serial.println(autoMode);
-
   Serial.print("FIREBASE STATUS : ");
-
   Serial.println(firebaseStatus);
-
   Serial.print("ALAT AKTIF : ");
-
   Serial.println(alatAktif);
-
   Serial.print("RELAY : ");
-
   Serial.println(relayStatus);
-
   Serial.print("CAHAYA : ");
-
   Serial.println(cahayaStatus);
-
   Serial.println("======================");
 
   delay(3000);
