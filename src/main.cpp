@@ -62,7 +62,7 @@ String autoModeURL = "https://"
 
 unsigned long lastCapture = 0;
 
-const unsigned long captureInterval = 60000;
+const unsigned long captureInterval = 300000; // jadikan 5 menit
 
 // FOTO
 
@@ -92,7 +92,7 @@ bool cameraOK = false;
 
 // SIMULASI BATTERY
 unsigned long lastBatteryUpdate = 0;
-const unsigned long batteryUpdateInterval = 30000; // Update tiap 30 detik
+const unsigned long batteryUpdateInterval = 60000; // Update tiap 60 detik
 float batteryLevel = 100.0;
 
 String cahayaStatus;
@@ -208,7 +208,9 @@ void bacaFirebase() {
 
 void setup() {
 
-  Serial.begin(115200);
+  // RX pin dinonaktifkan (-1) agar GPIO 3 bebas untuk LDR
+  // Serial Monitor tetap bisa via TX (GPIO 1) saja
+  Serial.begin(115200, SERIAL_8N1, -1, 1);
 
   Serial.println();
 
@@ -457,8 +459,8 @@ void loop() {
 
   if (autoMode) {
 
-    alatAktif =
-        (lightValue == HIGH && !wadahPenuh); // HIGH = gelap = aktifkan perangkap
+    // Perangkap aktif hanya jika GELAP dan wadah BELUM penuh
+    alatAktif = (lightValue == HIGH && !wadahPenuh);
   }
 
   // =====================================================
@@ -571,19 +573,34 @@ void loop() {
 
   int batteryPercent = (int)batteryLevel;
 
-  // Simulasi konsumsi daya (Watt)
-  float basePower = 2.5; // ESP32 + WiFi baseline
+  // Simulasi konsumsi daya (persentase 1-100%)
+  int powerConsumption = 15; // Base: ESP32 + WiFi (~15%)
 
   if (alatAktif)
-    basePower += 8.5; // Relay + lampu UV
+    powerConsumption += 55; // Relay + lampu UV
   if (cameraOK)
-    basePower += 1.5; // Kamera
+    powerConsumption += 15; // Kamera
 
-  basePower += random(-50, 51) / 100.0; // Noise ±0.5W
+  // Noise ±5%
+  powerConsumption += random(-5, 6);
 
-  int powerConsumption = (int)basePower;
   if (powerConsumption < 1)
     powerConsumption = 1;
+  if (powerConsumption > 100)
+    powerConsumption = 100;
+
+  // Simulasi tegangan battery (12.6V penuh, 10.5V habis)
+  float batteryVoltage = 10.5 + (batteryLevel / 100.0) * 2.1;
+
+  // Health battery berdasarkan level
+  String batteryHealth;
+  if (batteryPercent > 50) {
+    batteryHealth = "BAIK";
+  } else if (batteryPercent > 20) {
+    batteryHealth = "RENDAH";
+  } else {
+    batteryHealth = "KRITIS";
+  }
 
   // =====================================================
   // JSON FIREBASE
@@ -591,25 +608,7 @@ void loop() {
 
   String jsonData = "{";
 
-  // =========================================
-  // STATUS
-  // =========================================
-
-  jsonData += "\"status\":";
-
-  jsonData += (firebaseStatus ? "true" : "false");
-
-  jsonData += ",";
-
-  // =========================================
-  // AUTO MODE
-  // =========================================
-
-  jsonData += "\"auto_mode\":";
-
-  jsonData += (autoMode ? "true" : "false");
-
-  jsonData += ",";
+  // status dan auto_mode TIDAK dikirim (dikontrol dari app saja)
 
   // =========================================
   // SENSOR
@@ -656,24 +655,21 @@ void loop() {
   jsonData += "\"battery\":{";
 
   jsonData += "\"percent\":";
-
   jsonData += String(batteryPercent);
+  jsonData += ",";
 
-  jsonData += "},";
+  jsonData += "\"voltage\":\"";
+  jsonData += String(batteryVoltage, 1);
+  jsonData += "V\",";
 
-  // =========================================
-  // OPERATION MODE
-  // =========================================
-
-  jsonData += "\"operation_mode\":{";
-
-  jsonData += "\"days\":\"0,1,2,3,4\",";
-
-  jsonData += "\"start_time\":\"18:00\",";
-
-  jsonData += "\"end_time\":\"06:00\"";
+  jsonData += "\"health\":\"";
+  jsonData += batteryHealth;
+  jsonData += "\"";
 
   jsonData += "}";
+
+  // operation_mode dan trap_analysis TIDAK dikirim
+  // (dikontrol dari app saja, sama seperti status dan auto_mode)
 
   jsonData += "}";
 
@@ -689,7 +685,8 @@ void loop() {
 
     http.addHeader("Content-Type", "application/json");
 
-    int httpResponseCode = http.PUT(jsonData);
+    int httpResponseCode =
+        http.PATCH(jsonData); // PATCH: update hanya field sensor
 
     Serial.print("FIREBASE RESPONSE : ");
 
@@ -705,32 +702,40 @@ void loop() {
   Serial.println("======================");
 
   Serial.print("AUTO MODE : ");
-
-  Serial.println(autoMode);
+  Serial.println(autoMode ? "TRUE" : "FALSE");
 
   Serial.print("FIREBASE STATUS : ");
-
-  Serial.println(firebaseStatus);
+  Serial.println(firebaseStatus ? "TRUE" : "FALSE");
 
   Serial.print("ALAT AKTIF : ");
+  Serial.println(alatAktif ? "TRUE" : "FALSE");
 
-  Serial.println(alatAktif);
-
-  Serial.print("RELAY : ");
-
-  Serial.println(relayStatus);
+  Serial.print("LIGHT RAW : ");
+  Serial.println(lightValue);
 
   Serial.print("CAHAYA : ");
-
   Serial.println(cahayaStatus);
+
+  Serial.print("PROX RAW : ");
+  Serial.println(proxValue);
+
+  Serial.print("WADAH PENUH : ");
+  Serial.println(wadahPenuh ? "YA" : "TIDAK");
+
+  Serial.print("RELAY : ");
+  Serial.println(relayStatus);
 
   Serial.print("BATTERY : ");
   Serial.print(batteryPercent);
-  Serial.println("%");
+  Serial.print("% (");
+  Serial.print(batteryVoltage, 1);
+  Serial.print("V - ");
+  Serial.print(batteryHealth);
+  Serial.println(")");
 
   Serial.print("POWER : ");
   Serial.print(powerConsumption);
-  Serial.println("W");
+  Serial.println("%");
 
   Serial.println("======================");
 
